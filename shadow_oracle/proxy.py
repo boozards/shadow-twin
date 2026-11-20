@@ -15,6 +15,7 @@ import yaml
 import os
 
 from shadow_oracle.db_diff import TwinDBOracle
+from shadow_oracle.event_tap import event_tap
 
 class ShadowProxyOracle:
     """Concurrent Traffic Mirror, Diff Oracle, and Canary Traffic Router."""
@@ -34,6 +35,7 @@ class ShadowProxyOracle:
             policy_path = os.path.join(os.path.dirname(__file__), "diff_policy.yaml")
         self.policy = self._load_policy(policy_path)
         self.twin_db = TwinDBOracle(policy_path=policy_path)
+        self.event_tap = event_tap
 
         # Performance and latency metrics
         self.metrics = {
@@ -135,7 +137,10 @@ class ShadowProxyOracle:
         if is_mutating:
             db_diff = self.twin_db.diff_databases()
 
-        is_parity = http_match and (not db_diff.get("has_divergence", False))
+        # 3. Async Event Tap Diff (Pub/Sub & Webhook side-effects)
+        event_diff = self.event_tap.diff_events()
+
+        is_parity = http_match and (not db_diff.get("has_divergence", False)) and (not event_diff.get("has_divergence", False))
 
         if is_parity:
             self.metrics["identical_matches"] += 1
@@ -162,6 +167,7 @@ class ShadowProxyOracle:
             "candidate_body": cand_body,
             "field_diffs": field_diffs,
             "db_diff": db_diff,
+            "event_diff": event_diff,
             "request_payload": json_body,
             "request_headers": req_headers,
             "legacy_latency_ms": round(leg_lat, 2),
