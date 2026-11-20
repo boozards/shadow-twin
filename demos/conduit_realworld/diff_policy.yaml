@@ -1,0 +1,45 @@
+version: "2.0"
+policy_name: "conduit_realworld_policy"
+
+volatile_fields:
+  - path: ".*token$"
+    type: "regex"
+    pattern: "^jwt\\.[a-zA-Z0-9_\\-\\.]+$"
+    required: true
+  - path: ".*(createdAt|created_at|updatedAt|updated_at)$"
+    type: "iso8601_datetime"
+    required: true
+  - path: ".*comment\\.id$"
+    type: "integer"
+    required: true
+
+strict_fields:
+  - path: "email"
+    type: "string"
+  - path: "username"
+    type: "string"
+  - path: "slug"
+    type: "string"
+  - path: "title"
+    type: "string"
+  - path: "description"
+    type: "string"
+  - path: "body"
+    type: "string"
+  - path: "favoritesCount"
+    type: "integer"
+  - path: "favorited"
+    type: "boolean"
+  - path: "tagList"
+    type: "list"
+
+db_state_diff:
+  monitored_tables:
+    - name: "users"
+      hash_columns: ["email", "username", "bio", "image"]
+    - name: "articles"
+      hash_columns: ["slug", "title", "description", "body", "favorites_count"]
+    - name: "favorites"
+      hash_columns: ["user_id", "article_id"]
+    - name: "comments"
+      hash_columns: ["article_id", "author_id", "body"]
