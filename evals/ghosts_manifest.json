@@ -1,0 +1,102 @@
+[
+  {
+    "id": "GHOST-01",
+    "name": "Line-Item Banker's Rounding vs. Half-Up",
+    "category": "Financial Math",
+    "description": "Tax is rounded HALF_EVEN per line item before summing, causing $0.01–$0.03 invoice drifts if rounded at invoice total level.",
+    "endpoint": "/api/v1/quotes/calculate",
+    "planted_location": "LegacyCore pricing calculator & tax accumulator",
+    "symptom": "Canonical tax_amount diverges by 0.01-0.03 on multi-item orders with fractional cent tax amounts.",
+    "verification_rule": "decimal_equality(legacy.tax_amount, candidate.tax_amount) == True"
+  },
+  {
+    "id": "GHOST-02",
+    "name": "HTTP 200 OK with Error Envelope",
+    "category": "Protocol Quirk",
+    "description": "Over-limit orders return HTTP 200 with {'ok': true, 'errCode': 'E_CREDIT_CAP'} instead of standard 400/422 status.",
+    "endpoint": "/api/v1/orders/submit",
+    "planted_location": "LegacyCore OrderController credit cap validator",
+    "symptom": "Candidate returns HTTP 422 or 400 when customer exceeds credit limit, breaking legacy envelope parsers.",
+    "verification_rule": "legacy.status_code == candidate.status_code and legacy.body.get('errCode') == candidate.body.get('errCode')"
+  },
+  {
+    "id": "GHOST-03",
+    "name": "Hidden PL/pgSQL BEFORE INSERT Trigger",
+    "category": "DB Side-Effect",
+    "description": "A silent database trigger applies a 5% loyalty rebate on orders over $1,000 for Tier-A accounts.",
+    "endpoint": "/api/v1/orders/submit",
+    "planted_location": "db/init_legacy.sql (apply_loyalty_rebate_trg)",
+    "symptom": "Database row in candidate_db has discount_amount = 0.00 while legacy_db has 5% loyalty discount row and adjusted net_total.",
+    "verification_rule": "legacy_db.orders.discount_amount == candidate_db.orders.discount_amount"
+  },
+  {
+    "id": "GHOST-04",
+    "name": "Naive Timestamp IST/UTC Cutoff Bug",
+    "category": "Timezone Drift",
+    "description": "Daily reconciliation buckets transactions using server-local time (IST UTC+5:30) instead of UTC midnight.",
+    "endpoint": "/api/v1/ledger/reconcile",
+    "planted_location": "LegacyCore LedgerService date-bucketing query",
+    "symptom": "Transactions between 18:30 UTC and 23:59 UTC are counted in the next calendar day in legacy_db.",
+    "verification_rule": "legacy.body['total_reconciled'] == candidate.body['total_reconciled']"
+  },
+  {
+    "id": "GHOST-05",
+    "name": "Null vs. Empty-String Serialization",
+    "category": "Schema Quirk",
+    "description": "Legacy JDBC maps missing promo_code to '' on quotes but null on order receipts.",
+    "endpoint": "/api/v1/quotes/calculate",
+    "planted_location": "LegacyCore QuoteDTO vs OrderReceiptDTO mapper",
+    "symptom": "Quote response has promo_code: '' when absent, but submit response has promo_code: null.",
+    "verification_rule": "legacy.body.get('promo_code') == candidate.body.get('promo_code')"
+  },
+  {
+    "id": "GHOST-06",
+    "name": "Implicit Idempotency Window (60s)",
+    "category": "Stateful Logic",
+    "description": "Duplicate POST /orders/submit with matching (customer_id, cart_hash) within 60s returns cached order ID instead of creating a second row.",
+    "endpoint": "/api/v1/orders/submit",
+    "planted_location": "LegacyCore OrderSubmissionFilter memory-window cache",
+    "symptom": "Resubmitting identical payload within 60s creates duplicate order and charge in naive candidate.",
+    "verification_rule": "legacy_db.orders.count == candidate_db.orders.count"
+  },
+  {
+    "id": "GHOST-07",
+    "name": "Partial-Refund Proportional Tax Cap",
+    "category": "Edge-Case Math",
+    "description": "Refunding the final item absorbs residual rounding pennies so total refunded tax + subtotal never exceeds original charge.",
+    "endpoint": "/api/v1/refunds/process",
+    "planted_location": "LegacyCore RefundService residual accumulator",
+    "symptom": "Last item refund differs by $0.01 or total refunded sum exceeds initial order charge.",
+    "verification_rule": "legacy.body['refund_amount'] == candidate.body['refund_amount']"
+  },
+  {
+    "id": "GHOST-08",
+    "name": "Case-Insensitive Header Routing",
+    "category": "Middleware Quirk",
+    "description": "Legacy custom header X-Tenant-Tier: enterprise (or any case) silently overrides DB tenant pricing to 15% discount.",
+    "endpoint": "/api/v1/quotes/calculate",
+    "planted_location": "LegacyCore TenantFilter header interceptor",
+    "symptom": "Candidate relies only on customer table tier and ignores client X-Tenant-Tier header override.",
+    "verification_rule": "legacy.body['total'] == candidate.body['total']"
+  },
+  {
+    "id": "GHOST-09",
+    "name": "Soft-Deleted Customer Ghost Balance",
+    "category": "Data Integrity",
+    "description": "Archived accounts (is_active = false) still accrue late fees during /ledger/reconcile unless explicitly zeroed.",
+    "endpoint": "/api/v1/ledger/reconcile",
+    "planted_location": "LegacyCore LedgerService customer iteration query",
+    "symptom": "Candidate filters WHERE is_active = true, ignoring dormant debt accounts and causing ledger drift.",
+    "verification_rule": "legacy.body['late_fees_accrued'] == candidate.body['late_fees_accrued']"
+  },
+  {
+    "id": "GHOST-10",
+    "name": "Artificial N+1 Query Latency Spike",
+    "category": "Performance",
+    "description": "Legacy runs an unindexed per-item JDBC lookup (250–600ms P99), giving the Cloud Run candidate a measurable speedup benchmark.",
+    "endpoint": "/api/v1/quotes/calculate",
+    "planted_location": "LegacyCore ItemCatalogRepository loop query",
+    "symptom": "Legacy P99 latency spikes above 250ms on multi-item orders.",
+    "verification_rule": "candidate.p99_latency_ms < (legacy.p99_latency_ms / 3.0)"
+  }
+]
