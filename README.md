@@ -1,6 +1,6 @@
 # ShadowStrangler: Autonomous Legacy-to-Cloud Migration & Live Traffic Diff Swarm
 
-[![CI](https://github.com/google-cloud-consulting/shadowstrangler/actions/workflows/ci.yml/badge.svg)](https://github.com/google-cloud-consulting/shadowstrangler/actions)
+[![CI](https://github.com/boozards/shadow-twin/actions/workflows/ci.yml/badge.svg)](https://github.com/boozards/shadow-twin/actions)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Google ADK](https://img.shields.io/badge/Google%20ADK-2.15.0-4285F4.svg)](https://github.com/google/adk)
 [![Runtime](https://img.shields.io/badge/Cloud%20Run-Serverless%20FastAPI-009688.svg)](https://cloud.google.com/run)
@@ -152,7 +152,7 @@ Styled as a clean, warm editorial light-mode engineering workbench:
 
 ### 1. Clone & Set Up Python Environment
 ```bash
-git clone https://github.com/google-cloud-consulting/shadowstrangler.git
+git clone https://github.com/boozards/shadow-twin.git
 cd shadowstrangler
 
 # Create virtual environment and install dependencies
@@ -230,8 +230,8 @@ shadowstrangler/
 │   ├── app.py                    # Active candidate entrypoint
 │   └── Dockerfile                # Sub-3-second build layer caching
 ├── frontend/                     # Next.js 15 Strangler Control Plane UI
-├── docker-compose.yml            # Full production stack compose file
-└── .github/workflows/ci.yml      # CI workflow for pytest + benchmark + Next.js build
+├── ci/github-actions-workflow.yml # CI pipeline definition (pytest + benchmark + UI build)
+└── docker-compose.yml            # Full production stack compose file
 ```
 
 ---
