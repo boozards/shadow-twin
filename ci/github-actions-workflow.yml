@@ -1,0 +1,67 @@
+name: ShadowStrangler CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test-and-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up OpenJDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Compile LegacyCore Java Monolith
+        run: |
+          mkdir -p legacy_core/target/classes
+          javac -d legacy_core/target/classes legacy_core/src/main/java/com/shadowstrangler/legacy/LegacyServer.java
+          jar cfe legacy_core/legacy_core.jar com.shadowstrangler.legacy.LegacyServer -C legacy_core/target/classes .
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install fastapi uvicorn "pydantic>=2.0" httpx pyyaml deepdiff pytest opentelemetry-api opentelemetry-sdk google-adk
+
+      - name: Run ShadowStrangler Pytest Suite
+        run: |
+          pytest tests/ -v
+
+      - name: Run 500-Request Benchmark Suite (V1 vs V2 Comparison)
+        run: |
+          python evals/run_benchmark.py
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Build Next.js 15 Control Plane
+        run: npm run build

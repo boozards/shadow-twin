@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  # 1. Authoritative Legacy Monolith (Java 17 Spring Boot / raw JDBC)
+  legacy-core:
+    build:
+      context: ./legacy_core
+      dockerfile: Dockerfile
+    container_name: shadowstrangler-legacy-core
+    ports:
+      - "8081:8081"
+    environment:
+      - PORT=8081
+      - DB_URL=jdbc:postgresql://postgres-legacy:5432/legacy_db
+      - DB_USER=postgres
+      - DB_PASSWORD=shadowpass
+    depends_on:
+      postgres-legacy:
+        condition: service_healthy
+    networks:
+      - legacy-net
+      - mirror-net
+
+  # 2. Authoritative Legacy Database (PostgreSQL 16 with planted triggers)
+  postgres-legacy:
+    image: postgres:16-alpine
+    container_name: shadowstrangler-postgres-legacy
+    environment:
+      POSTGRES_DB: legacy_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: shadowpass
+    volumes:
+      - ./legacy_core/db/init_legacy.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d legacy_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    networks:
+      - legacy-net
+
+  # 3. Isolated Candidate Twin Database (PostgreSQL 16)
+  postgres-candidate:
+    image: postgres:16-alpine
+    container_name: shadowstrangler-postgres-candidate
+    environment:
+      POSTGRES_DB: candidate_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: shadowpass
+    volumes:
+      - ./legacy_core/db/init_legacy.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d candidate_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    networks:
+      - candidate-net
+
+  # 4. Migrated Cloud Run Candidate Microservice (FastAPI + Pydantic v2 + asyncpg)
+  candidate-service:
+    build:
+      context: ./candidate_workspace
+      dockerfile: Dockerfile
+    container_name: shadowstrangler-candidate
+    ports:
+      - "8082:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=postgresql://postgres:shadowpass@postgres-candidate:5432/candidate_db
+      - CANDIDATE_VERSION=v2
+    depends_on:
+      postgres-candidate:
+        condition: service_healthy
+    networks:
+      - candidate-net
+      - mirror-net
+
+  # 5. Shadow Traffic Mirror & Twin-DB State-Diff Oracle
+  shadow-oracle:
+    build:
+      context: .
+      dockerfile: Dockerfile.oracle
+    container_name: shadowstrangler-shadow-oracle
+    ports:
+      - "8080:8080"
+    environment:
+      - LEGACY_BASE_URL=http://legacy-core:8081
+      - CANDIDATE_BASE_URL=http://candidate-service:8080
+      - CANARY_PERCENT=0.1
+    depends_on:
+      - legacy-core
+      - candidate-service
+    networks:
+      - mirror-net
+
+  # 6. Next.js 15 Strangler Control Plane UI
+  control-plane-ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: shadowstrangler-ui
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_ORACLE_URL=http://localhost:8080
+    networks:
+      - mirror-net
+
+networks:
+  legacy-net:
+    driver: bridge
+  candidate-net:
+    driver: bridge
+  mirror-net:
+    driver: bridge

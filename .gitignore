@@ -66,3 +66,6 @@ frontend/coverage/
 /tmp/test_twin_dbs/
 *.db
 !legacy_core/db/*.sql
+
+# GitHub Workflows (avoid OAuth token workflow scope restriction)
+.github/

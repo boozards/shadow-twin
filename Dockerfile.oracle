@@ -1,0 +1,15 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+COPY .venv/ /app/.venv_cache/ 2>/dev/null || true
+COPY candidate_workspace/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir fastapi uvicorn httpx pyyaml deepdiff pydantic opentelemetry-api opentelemetry-sdk
+
+COPY shadow_oracle /app/shadow_oracle
+COPY candidate_workspace /app/candidate_workspace
+COPY evals /app/evals
+
+ENV PYTHONPATH=/app
+EXPOSE 8080
+
+CMD ["python3", "-c", "import uvicorn, os; from shadow_oracle.proxy import ShadowProxyOracle; from fastapi import FastAPI; app = FastAPI(); uvicorn.run(app, host='0.0.0.0', port=8080)"]
