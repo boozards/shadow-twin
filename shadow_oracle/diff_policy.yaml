@@ -1,0 +1,79 @@
+# ============================================================================
+# ShadowStrangler Diff Policy & Volatile-Field Canonicalizer Rules
+# Enforces strict financial and protocol parity while tolerating volatile tokens
+# ============================================================================
+
+version: "2.0"
+policy_name: "enterprise_financial_strict"
+
+# 1. Volatile Field Rules: structural and format validation without string equality
+volatile_fields:
+  - path: ".*created_at$"
+    type: "iso8601_datetime"
+    required: true
+  - path: ".*timestamp$"
+    type: "iso8601_datetime"
+    required: true
+  - path: ".*refund_id$"
+    type: "regex"
+    pattern: "^REF-[A-Fa-f0-9]+$"
+    required: true
+  - path: ".*order_id$"
+    type: "regex"
+    pattern: "^ORD-[A-Fa-f0-9]+$"
+    required: true
+  - path: ".*trace_id$"
+    type: "uuid_or_hex"
+    required: false
+
+# 2. Strict Exact Fields: must match bit-for-bit (financial down to penny)
+strict_fields:
+  - path: "subtotal"
+    type: "currency_decimal"
+  - path: "tax_amount"
+    type: "currency_decimal"
+  - path: "discount_amount"
+    type: "currency_decimal"
+  - path: "total"
+    type: "currency_decimal"
+  - path: "net_total"
+    type: "currency_decimal"
+  - path: "refund_amount"
+    type: "currency_decimal"
+  - path: "current_balance"
+    type: "currency_decimal"
+  - path: "credit_limit"
+    type: "currency_decimal"
+  - path: "available_credit"
+    type: "currency_decimal"
+  - path: "total_reconciled"
+    type: "currency_decimal"
+  - path: "late_fees_accrued"
+    type: "currency_decimal"
+  - path: "accounts_audited"
+    type: "integer"
+  - path: "status"
+    type: "string"
+  - path: "errCode"
+    type: "string"
+  - path: "ok"
+    type: "boolean"
+  - path: "promo_code"
+    type: "nullable_or_string"
+
+# 3. Database State Diff Policy: tables to snapshot & hash
+db_state_diff:
+  monitored_tables:
+    - name: "orders"
+      hash_columns: ["customer_id", "status", "subtotal", "tax_amount", "discount_amount", "net_total"]
+      exclude_columns: ["created_at"]
+    - name: "order_items"
+      hash_columns: ["sku", "quantity", "unit_price", "line_subtotal", "line_tax"]
+    - name: "ledger_entries"
+      hash_columns: ["account_id", "entry_type", "amount", "balance_after"]
+      exclude_columns: ["created_at"]
+    - name: "audit_events"
+      hash_columns: ["event_type", "entity_id", "payload_hash"]
+      exclude_columns: ["created_at"]
+    - name: "customers"
+      hash_columns: ["id", "tier", "balance", "credit_limit", "is_active"]
